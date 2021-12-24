@@ -73,13 +73,13 @@ namespace AdventOfCode.Solutions.Day23
 
             var initialState = new State();
             initialState.RoomOccupants[0, 0] = 1;
-            initialState.RoomOccupants[0, 1] = 0;
-            initialState.RoomOccupants[1, 0] = 2;
-            initialState.RoomOccupants[1, 1] = 3;
-            initialState.RoomOccupants[2, 0] = 1;
-            initialState.RoomOccupants[2, 1] = 2;
-            initialState.RoomOccupants[3, 0] = 3;
-            initialState.RoomOccupants[3, 1] = 0;
+            initialState.RoomOccupants[0, 1] = 3;
+            initialState.RoomOccupants[1, 0] = 1;
+            initialState.RoomOccupants[1, 1] = 2;
+            initialState.RoomOccupants[2, 0] = 3;
+            initialState.RoomOccupants[2, 1] = 0;
+            initialState.RoomOccupants[3, 0] = 0;
+            initialState.RoomOccupants[3, 1] = 2;
 
             return FindPath(initialState);
         }
@@ -98,14 +98,7 @@ namespace AdventOfCode.Solutions.Day23
                 bool foundSolution = true;
                 for (int i = 0; i < 4; ++i)
                 {
-                    foundSolution &= _rooms[i].IsCorrectlyAssigned(s);
-                }
-
-                if (foundSolution)
-                {
-                    solutions.Add((s, cost));
-                    Console.WriteLine("Solution found");
-                    continue;
+                    foundSolution = foundSolution && _rooms[i].IsCorrectlyAssigned(s);
                 }
 
                 if (stateCosts.TryGetValue(s, out int previousCost)) 
@@ -118,13 +111,15 @@ namespace AdventOfCode.Solutions.Day23
                         continue;
                     }
 
-                    //// If this cost is newer, replace it
-                    //stateCosts[s] = cost;
+                    // If this cost is newer, replace it
+                    stateCosts[s] = cost;
                 }
                 else 
                 {
                     stateCosts.Add(s, cost);
                 }
+
+                if (foundSolution) continue;
 
                 // Open all viable paths
                 for (int i = 0; i < 4; ++i)
@@ -138,18 +133,18 @@ namespace AdventOfCode.Solutions.Day23
                         if (occupant < 0)
                             continue; // This is empty
 
+                        if (_rooms[i].HasCorrectOccupant(s))
+                            continue; // I am in correct place, so don't move me
 
                         Amphipod a = _amphipods[occupant];
-                        int[] vn = _rooms[i].MoveStates[j].GetViableNodes(s);
-                        for (int h = 0; h < vn.Length; ++h) 
+                        foreach((int node, int length) in _rooms[i].MoveStates[j].GetViableNodes(s))
                         {
-                            int length = vn[h];
                             if (length <= 0)
                                 continue;
 
                             State newState = State.GetState().CopyState(s);
                             newState.RoomOccupants[i, j] = -1;
-                            newState.HallwayOccupants[h] = occupant;
+                            newState.HallwayOccupants[node] = occupant;
                             openedStates.Push((newState, cost + length * a.MoveCost));
                         }
                     }
@@ -164,9 +159,21 @@ namespace AdventOfCode.Solutions.Day23
                     Amphipod a = _amphipods[occupant];
                     int entry = _rooms[Amphipod.GetRoom(a.Type)].HallwayEntry;
                     bool pathBlocked = false;
-                    for (int p = Math.Min(entry, i); p < Math.Max(entry, i); ++p)
+                    
+                    if (entry > i)
                     {
-                        pathBlocked |= State.IsHallwayEmpty(s, p);
+                        for (int p = i + 1; p <= entry; ++p)
+                        {
+                            pathBlocked |= !State.IsHallwayEmpty(s, p);
+
+                        }
+                    }
+                    else
+                    {
+                        for (int p = i - 1; p >= entry; --p)
+                        {
+                            pathBlocked |= !State.IsHallwayEmpty(s, p);
+                        }
                     }
 
                     if (pathBlocked)
@@ -174,7 +181,7 @@ namespace AdventOfCode.Solutions.Day23
 
                     int lengthToEntry = Math.Abs(entry - i);
                     int node = _amphipodToRoomStates[a.Type].GetNode(s);
-                    if (node > 0)
+                    if (node >= 0)
                     {
                         State newState = State.GetState().CopyState(s);
                         newState.RoomOccupants[Amphipod.GetRoom(a.Type), node] = occupant;
@@ -367,7 +374,6 @@ namespace AdventOfCode.Solutions.Day23
             public bool Block;
             public int Room;
             public int HallwayNodeIndex;
-            private static int[] _viableNodes = new int[HallwaySize];
 
             public MoveOutside(int room, bool block, int hallwayNodeIndex)
             {
@@ -377,12 +383,10 @@ namespace AdventOfCode.Solutions.Day23
             }
 
 
-            internal int[] GetViableNodes(State s) 
+            internal IEnumerable<(int,int)> GetViableNodes(State s) 
             {
-                Array.Fill(_viableNodes, -1);
-
                 if (Block && s.RoomOccupants[Room, 0] > 0)
-                    return _viableNodes;
+                    yield break;
 
                 int offset = Block ? 2 : 1;
                 for (int i = HallwayNodeIndex; i >= 0; --i) 
@@ -391,7 +395,7 @@ namespace AdventOfCode.Solutions.Day23
                         break;
 
                     if (_hallway[i].CanStop)
-                        _viableNodes[i] = HallwayNodeIndex - i + offset;
+                        yield return (i, HallwayNodeIndex - i + offset);
                 }
 
                 for (int i = HallwayNodeIndex; i < _hallway.Length; ++i) 
@@ -400,10 +404,8 @@ namespace AdventOfCode.Solutions.Day23
                         break;
                     
                     if (_hallway[i].CanStop)
-                        _viableNodes[i] = i - HallwayNodeIndex + offset;
+                        yield return (i, i - HallwayNodeIndex + offset);
                 }
-
-                return _viableNodes;
             }
 
         }
@@ -464,6 +466,12 @@ namespace AdventOfCode.Solutions.Day23
             {
                 int room = Amphipod.GetRoom(AcceptedTyped);
                 return s.RoomOccupants[room, position] == -1;
+            }
+
+            internal bool HasCorrectOccupant(State s)
+            {
+                int room = Amphipod.GetRoom(AcceptedTyped);
+                return IsEmpty(s, 0) && s.RoomOccupants[room, 1] == room;
             }
         }
 
