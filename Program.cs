@@ -68,7 +68,10 @@ namespace AdventOfCode
             // Solve(new Solutions.Day22.SolutionPart2());
 
             //Solve(new Solutions.Day23.SolutionPart1());
-            Solve(new Solutions.Day23.SolutionPart2());
+            //Solve(new Solutions.Day23.SolutionPart2());
+
+            Solve(new Solutions.Day24.SolutionPart1_Math());
+            Solve(new Solutions.Day24.SolutionPart2_Math());
         }
 
         private static void Solve(ISolution<long> solution)
